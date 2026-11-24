@@ -1,0 +1,102 @@
+name: Security
+
+# Pipeline DevSecOps cobrindo SAST (CodeQL e Bandit), auditoria de vulnerabilidades (pip-audit)
+# e Dependency Review em Pull Requests, com execução contínua e agendada (semanal).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Toda segunda-feira às 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  codeql:
+    name: Análise SAST (CodeQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Inicializar CodeQL (Python)
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-extended
+
+      - name: Executar análise CodeQL
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+
+  bandit-sast:
+    name: Análise de Segurança Python (Bandit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Preparar ambiente Python
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.12"
+          extras: "dev"
+
+      - name: Executar Bandit (severidade média/alta)
+        run: |
+          bandit -r calculadora scripts -ll
+          bandit -r calculadora scripts -ll -f json -o bandit-report.json
+
+      - name: Publicar relatório Bandit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 14
+
+  auditoria-dependencias:
+    name: Auditoria de Vulnerabilidades (pip-audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Preparar ambiente Python
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.12"
+          extras: "dev"
+
+      - name: Auditar dependências instaladas no ambiente
+        run: pip-audit --local
+
+  dependency-review:
+    name: Revisão de Dependências no PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Executar Dependency Review Action
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

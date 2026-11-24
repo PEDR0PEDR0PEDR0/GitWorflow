@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentação de Arquitetura dos Workflows
+    url: https://github.com/PEDR0PEDR0PEDR0/GitWorflow/blob/main/docs/arquitetura-workflows.md
+    about: Consulte a explicação detalhada do GitHub Flow e dos pipelines CI/CD antes de abrir uma issue.
+  - name: Política de Segurança
+    url: https://github.com/PEDR0PEDR0PEDR0/GitWorflow/blob/main/SECURITY.md
+    about: Não abra issues públicas para vulnerabilidades de segurança; siga o canal privado descrito na política.

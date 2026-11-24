@@ -1,0 +1,103 @@
+name: CD GitHub Pages
+
+# Entrega Contínua (CD) com GitHub Environments (staging -> github-pages):
+# 1. Gera o portal estático e o relatório HTML de cobertura de testes
+# 2. Passa pelo ambiente `staging` (onde podem ser configurados revisores/regras de proteção)
+# 3. Publica oficialmente no GitHub Pages usando OIDC (`id-token: write`)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ambiente_alvo:
+        description: "Ambiente de destino da publicação manual"
+        required: true
+        type: choice
+        default: "production"
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Impede cancelamento no meio de um deploy ativo no GitHub Pages
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-portal:
+    name: Construir Portal e Relatório de Cobertura
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Preparar ambiente Python
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.12"
+          extras: "dev"
+
+      - name: Executar testes e gerar cobertura HTML/JSON
+        run: |
+          python -m pytest -v \
+            --cov=calculadora \
+            --cov-report=html:site_cov \
+            --cov-report=json:coverage.json \
+            --cov-fail-under=90
+
+      - name: Construir site estático em _site/
+        env:
+          DEPLOY_ENV: ${{ inputs.ambiente_alvo || 'production' }}
+        run: |
+          python scripts/build_pages.py \
+            --output _site \
+            --coverage-html site_cov \
+            --coverage-json coverage.json \
+            --environment "$DEPLOY_ENV"
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Enviar artefato do GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "_site"
+
+  validar-staging:
+    name: Promoção em Staging
+    needs: build-portal
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: staging
+    steps:
+      - name: Registrar validação no ambiente staging
+        shell: bash
+        run: |
+          {
+            echo "## Promoção de Deploy — Ambiente \`staging\`"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Branch: \`${GITHUB_REF_NAME}\`"
+            echo "- Status: Artefato validado e pronto para promoção para produção (\`github-pages\`)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-production:
+    name: Publicar no GitHub Pages (Produção)
+    needs: [build-portal, validar-staging]
+    if: github.event_name == 'push' || inputs.ambiente_alvo == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

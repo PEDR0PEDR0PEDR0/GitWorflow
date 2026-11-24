@@ -1,0 +1,98 @@
+[build-system]
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gitworflow-calculadora"
+version = "1.0.0"
+description = "Projeto de TCC demonstrando a implementação completa de GitHub Workflow (GitHub Flow, GitHub Actions CI/CD, Segurança e Governança)."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [
+  { name = "Pedro", email = "pedro@users.noreply.github.com" },
+]
+keywords = ["github-actions", "github-workflow", "ci-cd", "devops", "tcc", "python"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Education",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "bandit>=1.7",
+  "pip-audit>=2.7",
+  "pyyaml>=6.0",
+  "types-PyYAML>=6.0",
+]
+build = [
+  "build>=1.2",
+  "twine>=5.1",
+]
+
+[project.scripts]
+calculadora = "calculadora.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/PEDR0PEDR0PEDR0/GitWorflow"
+Repository = "https://github.com/PEDR0PEDR0PEDR0/GitWorflow"
+Issues = "https://github.com/PEDR0PEDR0PEDR0/GitWorflow/issues"
+Changelog = "https://github.com/PEDR0PEDR0PEDR0/GitWorflow/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+include = ["calculadora*"]
+
+[tool.setuptools.package-data]
+calculadora = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["-ra", "--strict-markers"]
+markers = [
+  "unit: testes unitários das operações e estatísticas",
+  "cli: testes da interface de linha de comando",
+  "pages: testes do gerador do portal estático do GitHub Pages",
+]
+
+[tool.coverage.run]
+source = ["calculadora"]
+branch = true
+omit = ["calculadora/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+fail_under = 90
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "S", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.bandit]
+targets = ["calculadora"]
+skips = []

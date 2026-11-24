@@ -1,0 +1,30 @@
+name: Proposta de Funcionalidade ou Workflow
+description: Sugira uma melhoria na aplicação, em automações do GitHub Actions ou na governança.
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Problema ou necessidade
+      description: Descreva qual cenário do GitHub Workflow ou funcionalidade está faltando.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solucao
+    attributes:
+      label: Solução proposta
+      description: Explique como a funcionalidade ou o workflow deveria operar.
+    validations:
+      required: true
+
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Critérios de aceite
+      placeholder: |
+        - [ ] Implementação concluída com tipagem e testes
+        - [ ] Workflow validado e documentado
+    validations:
+      required: false

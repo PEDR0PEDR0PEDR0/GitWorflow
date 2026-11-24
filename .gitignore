@@ -1,6 +1,35 @@
+# Ambientes virtuais
 .venv/
+venv/
+env/
+
+# Caches e artefatos Python
 __pycache__/
-.pytest_cache/
-.vscode/
 *.py[cod]
 *$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+
+# Testes, cobertura e linters
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+site_cov/
+junit.xml
+bandit-report.json
+
+# Build estático (GitHub Pages)
+_site/
+
+# Editores e sistema operacional
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

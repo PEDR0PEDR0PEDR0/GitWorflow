@@ -1,0 +1,106 @@
+name: PR Governance
+
+# Governança automatizada de Pull Requests alinhada ao GitHub Flow:
+# - Valida título seguindo Conventional Commits
+# - Valida convenção de nomenclatura de branch
+# - Calcula métrica de tamanho do PR (incentivando PRs pequenos e revisáveis)
+# - Aplica labels automaticamente conforme os caminhos alterados (.github/labeler.yml)
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-governance-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validar-convencoes:
+    name: Validar Título, Branch e Tamanho do PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validar título (Conventional Commits) e branch
+        shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REF: ${{ github.head_ref }}
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          title = os.environ["PR_TITLE"].strip()
+          branch = os.environ["HEAD_REF"].strip()
+          additions = int(os.environ.get("ADDITIONS", "0"))
+          deletions = int(os.environ.get("DELETIONS", "0"))
+          changed_files = int(os.environ.get("CHANGED_FILES", "0"))
+          total_lines = additions + deletions
+
+          title_pattern = re.compile(
+              r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
+              r"(\([a-z0-9._/-]+\))?!?: .+"
+          )
+          branch_pattern = re.compile(
+              r"^(feat|fix|docs|ci|refactor|test|chore|release|hotfix|demo|dependabot)/[A-Za-z0-9._/-]+$"
+          )
+
+          if total_lines < 50:
+              size_label = "XS"
+          elif total_lines < 200:
+              size_label = "S"
+          elif total_lines < 500:
+              size_label = "M"
+          elif total_lines < 1000:
+              size_label = "L"
+          else:
+              size_label = "XL"
+
+          title_ok = bool(title_pattern.match(title))
+          branch_ok = bool(branch_pattern.match(branch))
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as fh:
+                  fh.write("## Governança do Pull Request\n\n")
+                  fh.write(f"- **Título (`{title}`):** {'OK' if title_ok else 'Fora do padrão Conventional Commits'}\n")
+                  fh.write(f"- **Branch (`{branch}`):** {'OK' if branch_ok else 'Aviso: fora do prefixo recomendado'}\n")
+                  fh.write(f"- **Tamanho estimado:** `{size_label}` (+{additions} / -{deletions} linhas em {changed_files} arquivos)\n")
+
+          if not branch_ok:
+              print(
+                  f"::warning::Branch '{branch}' não segue o prefixo recomendado "
+                  "(feat/, fix/, docs/, ci/, refactor/, test/, chore/, release/, hotfix/)."
+              )
+
+          if not title_ok:
+              print(
+                  f"::error::Título do PR '{title}' deve seguir Conventional Commits "
+                  "(ex.: 'feat(cli): adiciona suporte a estatísticas')."
+              )
+              sys.exit(1)
+
+          print(f"PR validado com sucesso (tamanho {size_label}).")
+          PY
+
+  auto-label:
+    name: Aplicar Labels Automáticas
+    # Evita falha de permissão em PRs oriundos de forks externos (segurança padrão do GitHub)
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Rotular PR conforme arquivos alterados
+        uses: actions/labeler@v5
+        with:
+          configuration-path: .github/labeler.yml
+          sync-labels: true

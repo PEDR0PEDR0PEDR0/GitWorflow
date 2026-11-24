@@ -1,0 +1,44 @@
+# Regras de rotulagem automática de PRs para actions/labeler@v5
+"ci/cd":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/actions/**"
+
+"governance":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/ISSUE_TEMPLATE/**"
+          - ".github/rulesets/**"
+          - ".github/CODEOWNERS"
+          - ".github/PULL_REQUEST_TEMPLATE.md"
+          - ".github/labeler.yml"
+          - ".github/release.yml"
+          - "CONTRIBUTING.md"
+          - "CODE_OF_CONDUCT.md"
+
+"security":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/security.yml"
+          - ".github/dependabot.yml"
+          - "SECURITY.md"
+
+"python":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "calculadora/**"
+          - "scripts/**"
+          - "pyproject.toml"
+          - "requirements.txt"
+
+"tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+
+"documentation":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "*.md"
