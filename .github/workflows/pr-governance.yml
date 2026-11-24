@@ -48,7 +48,7 @@ jobs:
               r"(\([a-z0-9._/-]+\))?!?: .+"
           )
           branch_pattern = re.compile(
-              r"^(feat|fix|docs|ci|refactor|test|chore|release|hotfix|demo|dependabot)/[A-Za-z0-9._/-]+$"
+              r"^(develop|(feat|fix|docs|ci|refactor|test|chore|release|hotfix|demo|dependabot)/[A-Za-z0-9._/-]+)$"
           )
 
           if total_lines < 50:
@@ -97,6 +97,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      issues: write
       pull-requests: write
     steps:
       - name: Rotular PR conforme arquivos alterados

@@ -1,0 +1,6 @@
+# Garante fim de linha consistente (LF) entre Windows, macOS e Linux runners
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

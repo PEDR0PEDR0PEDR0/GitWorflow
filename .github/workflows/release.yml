@@ -86,7 +86,7 @@ jobs:
               sys.exit(1)
 
           versao_tag = match.group(1)
-          if event == "push" and versao_tag != __version__:
+          if (event == "push" or publicar == "true") and versao_tag != __version__:
               print(
                   f"::error::Versão da tag ({versao_tag}) difere de calculadora.__version__ ({__version__})."
               )
@@ -158,7 +158,12 @@ jobs:
             EXTRA_FLAGS+=(--prerelease)
           fi
 
-          gh release create "$RELEASE_TAG" dist/* \
-            --title "Release $RELEASE_TAG" \
-            --generate-notes \
-            "${EXTRA_FLAGS[@]}"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* \
+              --target "$GITHUB_SHA" \
+              --title "Release $RELEASE_TAG" \
+              --generate-notes \
+              "${EXTRA_FLAGS[@]}"
+          fi

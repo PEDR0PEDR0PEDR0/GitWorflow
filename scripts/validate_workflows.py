@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,17 +13,28 @@ import yaml
 RAIZ = Path(__file__).resolve().parent.parent
 DIR_GITHUB = RAIZ / ".github"
 
+# Contextos controlados por terceiros que nunca devem ser interpolados direto em `run:`
+PADRAO_INJECAO_RUN = re.compile(
+    r"\$\{\{\s*github\.event\.(pull_request\.(title|body)|issue\.(title|body)|comment\.body)"
+)
 
-def _validar_workflow(caminho: Path, dados: dict[Any, Any]) -> list[str]:
+
+def validar_workflow(caminho: Path, dados: dict[Any, Any], *, raiz: Path = RAIZ) -> list[str]:
+    """Valida regras estruturais e de segurança de um arquivo de workflow."""
     erros: list[str] = []
-    rel = caminho.relative_to(RAIZ)
+    rel = caminho.relative_to(raiz) if caminho.is_relative_to(raiz) else caminho
 
     if "name" not in dados:
         erros.append(f"{rel}: campo obrigatório 'name' ausente")
 
     # PyYAML (YAML 1.1) interpreta a chave 'on' sem aspas como booleano True
-    if "on" not in dados and True not in dados:
+    gatilhos = dados.get("on", dados.get(True))
+    if gatilhos is None:
         erros.append(f"{rel}: campo obrigatório 'on' ausente")
+
+    apenas_reusable = isinstance(gatilhos, dict) and set(gatilhos.keys()) == {"workflow_call"}
+    if not apenas_reusable and "concurrency" not in dados:
+        erros.append(f"{rel}: workflow deve declarar 'concurrency'")
 
     jobs = dados.get("jobs")
     if not isinstance(jobs, dict) or not jobs:
@@ -41,20 +53,33 @@ def _validar_workflow(caminho: Path, dados: dict[Any, Any]) -> list[str]:
             erros.append(
                 f"{rel}: job '{nome_job}' (ou workflow) deve declarar 'permissions' explícitas"
             )
+        steps = config_job.get("steps", [])
+        if isinstance(steps, list):
+            for idx, step in enumerate(steps, start=1):
+                if (
+                    isinstance(step, dict)
+                    and isinstance(step.get("run"), str)
+                    and PADRAO_INJECAO_RUN.search(step["run"])
+                ):
+                    erros.append(
+                        f"{rel}: job '{nome_job}' step #{idx} interpola campo não confiável "
+                        "diretamente em 'run:' (use variáveis de ambiente em 'env:')"
+                    )
 
     return erros
 
 
-def validar_diretorio_github() -> list[str]:
+def validar_diretorio_github(dir_github: Path = DIR_GITHUB) -> list[str]:
     """Executa validação de todos os YAMLs e JSONs em ``.github/``."""
     erros: list[str] = []
-    if not DIR_GITHUB.is_dir():
+    if not dir_github.is_dir():
         return [".github/: diretório não encontrado"]
 
-    for arquivo in sorted(DIR_GITHUB.rglob("*")):
+    raiz_ref = dir_github.parent
+    for arquivo in sorted(dir_github.rglob("*")):
         if not arquivo.is_file():
             continue
-        rel = arquivo.relative_to(RAIZ)
+        rel = arquivo.relative_to(raiz_ref)
 
         if arquivo.suffix in {".yml", ".yaml"}:
             try:
@@ -65,8 +90,8 @@ def validar_diretorio_github() -> list[str]:
             if not isinstance(conteudo, dict):
                 erros.append(f"{rel}: documento YAML deve ser um mapeamento na raiz")
                 continue
-            if arquivo.parent == DIR_GITHUB / "workflows":
-                erros.extend(_validar_workflow(arquivo, conteudo))
+            if arquivo.parent == dir_github / "workflows":
+                erros.extend(validar_workflow(arquivo, conteudo, raiz=raiz_ref))
 
         elif arquivo.suffix == ".json":
             try:

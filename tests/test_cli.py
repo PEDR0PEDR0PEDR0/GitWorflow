@@ -8,7 +8,7 @@ import json
 import pytest
 
 from calculadora import __version__
-from calculadora.cli import executar
+from calculadora.cli import executar, main
 
 pytestmark = pytest.mark.cli
 
@@ -86,3 +86,14 @@ def test_cli_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert exc_info.value.code == 0
     capturado = capsys.readouterr()
     assert __version__ in capturado.out
+
+
+def test_cli_main_entrypoint(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr("sys.argv", ["calculadora", "somar", "4", "6"])
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+    assert exc_info.value.code == 0
+    assert capsys.readouterr().out.strip() == "10"

@@ -58,9 +58,13 @@ jobs:
           extras: "dev"
 
       - name: Executar Bandit (severidade média/alta)
+        shell: bash
         run: |
-          bandit -r calculadora scripts -ll
+          set +e
           bandit -r calculadora scripts -ll -f json -o bandit-report.json
+          bandit -r calculadora scripts -ll
+          BANDIT_STATUS=$?
+          exit "$BANDIT_STATUS"
 
       - name: Publicar relatório Bandit
         if: always()

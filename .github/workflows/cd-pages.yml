@@ -20,8 +20,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Impede cancelamento no meio de um deploy ativo no GitHub Pages
 concurrency:
@@ -33,6 +31,10 @@ jobs:
     name: Construir Portal e Relatório de Cobertura
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
@@ -94,6 +96,10 @@ jobs:
     if: github.event_name == 'push' || inputs.ambiente_alvo == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
