@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Preparar ambiente Python
         uses: ./.github/actions/setup-python-env
@@ -53,7 +53,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Marcar ou encerrar itens inativos
-        uses: actions/stale@v9
+        uses: actions/stale@v11
         with:
           days-before-stale: 30
           days-before-close: 14
