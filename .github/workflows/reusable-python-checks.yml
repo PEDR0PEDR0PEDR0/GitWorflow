@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Preparar ambiente Python (Composite Action)
         uses: ./.github/actions/setup-python-env
@@ -107,7 +107,7 @@ jobs:
 
       - name: Publicar artefatos de cobertura e JUnit
         if: always() && inputs.upload-artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: relatorios-ci-${{ inputs.os }}-py${{ inputs.python-version }}
           path: |
