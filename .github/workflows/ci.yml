@@ -1,31 +1,151 @@
 name: CI
 
-# Quando o workflow é disparado
+# Integração Contínua completa seguindo as recomendações oficiais do GitHub Actions:
+# - Gatilhos de push, pull_request e execução manual (workflow_dispatch)
+# - Permissões explícitas com privilégio mínimo (least privilege)
+# - Concurrency para cancelar execuções obsoletas em branches/PRs sem interromper a main
+# - Qualidade estática (Ruff, Mypy, validação de .github/), Matriz OS/Python via Reusable Workflow,
+#   validação de empacotamento (wheel/sdist) e Job Gate final chamado `testes` (compatível com o ruleset da main).
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      coverage-min:
+        description: "Percentual mínimo de cobertura para a execução manual"
+        required: false
+        type: number
+        default: 90
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  testes:
+  qualidade:
+    name: Lint, Tipagem e Validação de Workflows
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     steps:
-      # 1. Baixa o código do repositório
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # 2. Instala o Python
-      - name: Configurar Python
-        uses: actions/setup-python@v5
+      - name: Preparar ambiente Python
+        uses: ./.github/actions/setup-python-env
         with:
           python-version: "3.12"
+          extras: "dev"
 
-      # 3. Instala as dependências
-      - name: Instalar dependências
-        run: pip install -r requirements.txt
+      - name: Verificar lint (Ruff)
+        run: ruff check .
 
-      # 4. Roda os testes
-      - name: Executar testes
-        run: python -m pytest -v
+      - name: Verificar formatação (Ruff Format)
+        run: ruff format --check .
+
+      - name: Verificar tipagem estática (Mypy)
+        run: mypy calculadora tests scripts
+
+      - name: Validar sintaxe e estrutura de .github/
+        run: python scripts/validate_workflows.py
+
+  matriz-testes:
+    name: Matriz de Testes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+            upload-artifacts: false
+          - os: ubuntu-latest
+            python-version: "3.12"
+            upload-artifacts: true
+          - os: ubuntu-latest
+            python-version: "3.13"
+            upload-artifacts: false
+          - os: windows-latest
+            python-version: "3.12"
+            upload-artifacts: false
+          - os: macos-latest
+            python-version: "3.12"
+            upload-artifacts: false
+    uses: ./.github/workflows/reusable-python-checks.yml
+    with:
+      os: ${{ matrix.os }}
+      python-version: ${{ matrix.python-version }}
+      extras: "dev"
+      coverage-min: ${{ inputs.coverage-min || 90 }}
+      upload-artifacts: ${{ matrix.upload-artifacts }}
+
+  empacotamento:
+    name: Build e Smoke Test do Pacote
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Preparar ambiente de build
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.12"
+          extras: "build"
+
+      - name: Construir sdist e wheel
+        run: python -m build
+
+      - name: Validar metadados do pacote (Twine)
+        run: twine check dist/*
+
+      - name: Smoke test da CLI instalada a partir do wheel
+        run: |
+          python -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install --no-deps dist/*.whl
+          /tmp/smoke-venv/bin/calculadora --version
+          /tmp/smoke-venv/bin/calculadora somar 2 3
+          /tmp/smoke-venv/bin/calculadora --json estatistica 10 20 30
+
+      - name: Publicar artefato de distribuição
+        uses: actions/upload-artifact@v4
+        with:
+          name: pacote-dist
+          path: dist/
+          retention-days: 7
+
+  # Padrão oficial do GitHub para Required Status Checks com jobs em matriz:
+  # Um único job agregador chamado `testes` consolida todas as verificações obrigatórias,
+  # mantendo 100% de compatibilidade com o ruleset configurado na branch `main`.
+  testes:
+    name: testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [qualidade, matriz-testes, empacotamento]
+    if: always()
+    steps:
+      - name: Consolidar resultado dos jobs obrigatórios
+        shell: bash
+        env:
+          RES_QUALIDADE: ${{ needs.qualidade.result }}
+          RES_MATRIZ: ${{ needs.matriz-testes.result }}
+          RES_EMPACOTAMENTO: ${{ needs.empacotamento.result }}
+        run: |
+          {
+            echo "## Resumo Consolidado da CI (Gate \`testes\`)"
+            echo ""
+            echo "| Etapa | Resultado |"
+            echo "| :--- | :--- |"
+            echo "| Qualidade (Ruff, Mypy, YAML) | \`${RES_QUALIDADE}\` |"
+            echo "| Matriz de Testes (OS × Python) | \`${RES_MATRIZ}\` |"
+            echo "| Empacotamento (Wheel + CLI) | \`${RES_EMPACOTAMENTO}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$RES_QUALIDADE" != "success" ] || [ "$RES_MATRIZ" != "success" ] || [ "$RES_EMPACOTAMENTO" != "success" ]; then
+            echo "Um ou mais checks obrigatórios falharam. Merge bloqueado pelo gate 'testes'."
+            exit 1
+          fi
+          echo "Todos os checks obrigatórios passaram com sucesso."

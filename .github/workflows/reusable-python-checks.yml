@@ -1,0 +1,117 @@
+name: Reusable Python Checks
+
+# Workflow reutilizável (workflow_call) chamado pela matriz de CI.
+# Demonstra inputs tipados, outputs, Composite Action, artefatos e Step Summary.
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: "Runner operacional (ubuntu-latest, windows-latest, macos-latest)."
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      python-version:
+        description: "Versão do Python a ser testada."
+        required: false
+        type: string
+        default: "3.12"
+      extras:
+        description: "Extras de instalação do pyproject.toml."
+        required: false
+        type: string
+        default: "dev"
+      coverage-min:
+        description: "Percentual mínimo de cobertura exigido."
+        required: false
+        type: number
+        default: 90
+      upload-artifacts:
+        description: "Se verdadeiro, envia relatórios HTML de cobertura e JUnit como artefatos."
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      coverage-percent:
+        description: "Percentual total de cobertura calculado nesta execução."
+        value: ${{ jobs.executar-testes.outputs.coverage-percent }}
+
+permissions:
+  contents: read
+
+jobs:
+  executar-testes:
+    name: Testes (${{ inputs.os }} / Python ${{ inputs.python-version }})
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 15
+    outputs:
+      coverage-percent: ${{ steps.metricas.outputs.coverage-percent }}
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Preparar ambiente Python (Composite Action)
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: ${{ inputs.python-version }}
+          extras: ${{ inputs.extras }}
+
+      - name: Executar suíte pytest com cobertura
+        shell: bash
+        run: |
+          python -m pytest -v \
+            --cov=calculadora \
+            --cov-report=term-missing \
+            --cov-report=json:coverage.json \
+            --cov-report=html:htmlcov \
+            --cov-fail-under=${{ inputs.coverage-min }} \
+            --junitxml=junit.xml
+
+      - name: Extrair métricas e publicar Step Summary
+        id: metricas
+        if: always()
+        shell: bash
+        env:
+          RUNNER_OS_NAME: ${{ inputs.os }}
+          PY_VER: ${{ inputs.python-version }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          cov_path = Path("coverage.json")
+          percent = "N/D"
+          covered = 0
+          total = 0
+          if cov_path.is_file():
+              data = json.loads(cov_path.read_text(encoding="utf-8"))
+              totals = data.get("totals", {})
+              percent = str(totals.get("percent_covered_display", "0"))
+              covered = int(totals.get("covered_lines", 0))
+              total = int(totals.get("num_statements", 0))
+
+          gh_out = os.environ.get("GITHUB_OUTPUT")
+          if gh_out:
+              with open(gh_out, "a", encoding="utf-8") as fh:
+                  fh.write(f"coverage-percent={percent}\n")
+
+          gh_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if gh_summary:
+              with open(gh_summary, "a", encoding="utf-8") as fh:
+                  fh.write(
+                      f"### Resultado de Testes — `{os.environ['RUNNER_OS_NAME']}` / Python `{os.environ['PY_VER']}`\n\n"
+                      f"- **Cobertura:** `{percent}%` ({covered}/{total} linhas)\n\n"
+                  )
+          PY
+
+      - name: Publicar artefatos de cobertura e JUnit
+        if: always() && inputs.upload-artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorios-ci-${{ inputs.os }}-py${{ inputs.python-version }}
+          path: |
+            htmlcov/
+            coverage.json
+            junit.xml
+          retention-days: 14

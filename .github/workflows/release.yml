@@ -1,0 +1,169 @@
+name: Release
+
+# Fluxo completo de Release Automatizado baseado em Semantic Versioning (SemVer):
+# - Disparado por tags `v*.*.*` ou manualmente (com opção dry-run)
+# - Valida consistência entre tag e versão do pacote
+# - Constrói sdist + wheel, gera SHA256SUMS.txt
+# - Emite Build Provenance Attestation (SLSA/OIDC oficial do GitHub)
+# - Publica GitHub Release com notas categorizadas via `.github/release.yml`
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag SemVer para validação ou release manual (ex.: v1.0.0)"
+        required: true
+        type: string
+      publicar_release:
+        description: "Criar GitHub Release (desmarcado = apenas simulação / dry-run)"
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: "Marcar a release como pre-release"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validar-e-construir:
+    name: Validar Versão, Testar e Construir Artefatos
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      publicar: ${{ steps.meta.outputs.publicar }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Preparar ambiente Python (dev + build)
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.12"
+          extras: "dev,build"
+
+      - name: Validar tag SemVer e sincronia com __version__
+        id: meta
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_PUBLICAR: ${{ inputs.publicar_release }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import sys
+          from calculadora import __version__
+
+          event = os.environ["EVENT_NAME"]
+          if event == "push":
+              tag = os.environ["REF_NAME"]
+              publicar = "true"
+              prerelease = "true" if "-" in tag else "false"
+          else:
+              tag = os.environ["INPUT_TAG"].strip()
+              publicar = "true" if os.environ.get("INPUT_PUBLICAR") == "true" else "false"
+              prerelease = "true" if os.environ.get("INPUT_PRERELEASE") == "true" else "false"
+
+          semver_re = re.compile(r"^v([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.-]+)?$")
+          match = semver_re.match(tag)
+          if not match:
+              print(f"::error::Tag '{tag}' não segue o padrão SemVer (vMAJOR.MINOR.PATCH).")
+              sys.exit(1)
+
+          versao_tag = match.group(1)
+          if (event == "push" or publicar == "true") and versao_tag != __version__:
+              print(
+                  f"::error::Versão da tag ({versao_tag}) difere de calculadora.__version__ ({__version__})."
+              )
+              sys.exit(1)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"tag={tag}\n")
+              fh.write(f"publicar={publicar}\n")
+              fh.write(f"prerelease={prerelease}\n")
+
+          print(f"Release validada: tag={tag}, pacote={__version__}, publicar={publicar}")
+          PY
+
+      - name: Executar testes antes da release
+        run: python -m pytest -v --cov=calculadora --cov-fail-under=90
+
+      - name: Construir pacotes de distribuição (wheel e sdist)
+        run: |
+          python -m build
+          twine check dist/*
+          (cd dist && sha256sum *.whl *.tar.gz > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+
+      - name: Enviar artefatos de release
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: dist/
+          retention-days: 30
+
+  publicar-release:
+    name: Emitir Attestation e Publicar GitHub Release
+    needs: validar-e-construir
+    if: needs.validar-e-construir.outputs.publicar == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Baixar artefatos de release
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+
+      - name: Gerar Build Provenance Attestation (SLSA)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+
+      - name: Criar ou atualizar GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.validar-e-construir.outputs.tag }}
+          IS_PRERELEASE: ${{ needs.validar-e-construir.outputs.prerelease }}
+        run: |
+          EXTRA_FLAGS=()
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            EXTRA_FLAGS+=(--prerelease)
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* \
+              --target "$GITHUB_SHA" \
+              --title "Release $RELEASE_TAG" \
+              --generate-notes \
+              "${EXTRA_FLAGS[@]}"
+          fi

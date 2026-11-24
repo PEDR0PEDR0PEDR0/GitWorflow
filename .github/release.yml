@@ -1,0 +1,32 @@
+# Categorização automática das notas de lançamento do GitHub Releases
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+    authors:
+      - dependabot
+  categories:
+    - title: "Novas Funcionalidades"
+      labels:
+        - enhancement
+        - feat
+    - title: "Correções de Bugs"
+      labels:
+        - bug
+        - fix
+    - title: "CI/CD, Workflows e Governança"
+      labels:
+        - "ci/cd"
+        - governance
+    - title: "Segurança"
+      labels:
+        - security
+    - title: "Documentação"
+      labels:
+        - documentation
+    - title: "Dependências"
+      labels:
+        - dependencies
+    - title: "Outras Alterações"
+      labels:
+        - "*"

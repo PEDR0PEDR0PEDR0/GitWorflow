@@ -1,0 +1,19 @@
+# Definição de responsáveis automáticos por revisão de código (CODEOWNERS)
+# Referência: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Responsável padrão do repositório
+* @PEDR0PEDR0PEDR0
+
+# Workflows, Actions, Dependabot e Rulesets
+/.github/ @PEDR0PEDR0PEDR0
+
+# Núcleo do pacote Python e CLI
+/calculadora/ @PEDR0PEDR0PEDR0
+
+# Suíte de testes e scripts de automação
+/tests/ @PEDR0PEDR0PEDR0
+/scripts/ @PEDR0PEDR0PEDR0
+
+# Documentação técnica e TCC
+/docs/ @PEDR0PEDR0PEDR0
+/README.md @PEDR0PEDR0PEDR0

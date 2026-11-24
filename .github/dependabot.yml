@@ -1,0 +1,47 @@
+version: 2
+
+# Atualizações automatizadas de dependências (Supply Chain Security)
+updates:
+  # 1. Ecossistema Python (pyproject.toml e requirements.txt)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      dev-tools:
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "bandit"
+          - "pip-audit"
+          - "build"
+          - "twine"
+
+  # 2. Ecossistema GitHub Actions (.github/workflows/ e .github/actions/)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(deps)"
+    labels:
+      - "dependencies"
+      - "ci/cd"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

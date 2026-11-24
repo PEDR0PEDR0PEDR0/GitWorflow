@@ -1,0 +1,71 @@
+name: Maintenance
+
+# Rotinas agendadas (cron) para saúde contínua e higiene do repositório.
+on:
+  schedule:
+    # Todos os domingos às 08:00 UTC
+    - cron: "0 8 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maintenance
+  cancel-in-progress: true
+
+jobs:
+  saude-repositorio:
+    name: Verificação Semanal de Saúde
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Preparar ambiente Python
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.12"
+          extras: "dev"
+
+      - name: Validar workflows e rodar suíte de testes
+        run: |
+          python scripts/validate_workflows.py
+          python -m pytest -v --cov=calculadora --cov-fail-under=90
+
+      - name: Registrar resumo de saúde
+        shell: bash
+        run: |
+          {
+            echo "## Relatório de Saúde do Repositório"
+            echo ""
+            echo "- Workflows em \`.github/\`: válidos"
+            echo "- Suíte de testes e cobertura mínima (90%): aprovados"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  stale-issues-prs:
+    name: Triagem de Issues e PRs Inativos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Marcar ou encerrar itens inativos
+        uses: actions/stale@v9
+        with:
+          days-before-stale: 30
+          days-before-close: 14
+          stale-issue-label: "stale"
+          stale-pr-label: "stale"
+          exempt-issue-labels: "pinned,security,tcc"
+          exempt-pr-labels: "pinned,security,tcc"
+          stale-issue-message: >-
+            Esta issue está sem atividade há 30 dias e foi marcada como inativa (`stale`).
+            Comente para mantê-la aberta ou ela será encerrada automaticamente em 14 dias.
+          stale-pr-message: >-
+            Este Pull Request está sem atividade há 30 dias e foi marcado como inativo (`stale`).
+            Atualize ou comente para mantê-lo aberto, caso contrário será fechado em 14 dias.
+          close-issue-message: "Encerrada automaticamente por inatividade prolongada."
+          close-pr-message: "Fechado automaticamente por inatividade prolongada."

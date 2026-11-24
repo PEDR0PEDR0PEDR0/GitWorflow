@@ -1,0 +1,63 @@
+name: Relato de Bug
+description: Reporte um erro no pacote Python, na CLI ou nos workflows do GitHub Actions.
+title: "fix: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por reportar um problema! Preencha os campos abaixo para facilitar a reprodução e correção.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afetada
+      options:
+        - Pacote Python (`calculadora/`)
+        - Interface CLI
+        - GitHub Actions / Workflows (`.github/`)
+        - Portal GitHub Pages (`scripts/build_pages.py`)
+        - Documentação
+    validations:
+      required: true
+
+  - type: textarea
+    id: descricao
+    attributes:
+      label: Descrição do problema
+      description: Explique de forma clara o comportamento inesperado observado.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducao
+    attributes:
+      label: Passos para reproduzir
+      placeholder: |
+        1. Execute `...`
+        2. Observe o erro `...`
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Comportamento esperado
+    validations:
+      required: true
+
+  - type: input
+    id: ambiente
+    attributes:
+      label: Ambiente (SO e versão do Python)
+      placeholder: "Ex.: Windows 11 / Ubuntu 24.04, Python 3.12"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs ou link da execução no GitHub Actions
+      render: shell
+    validations:
+      required: false
